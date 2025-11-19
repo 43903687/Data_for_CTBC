@@ -8,7 +8,7 @@
       },
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.3,
-      "position": [
+      "position": [ 
         416,
         -96
       ],
@@ -57,7 +57,7 @@
       "position": [
         608,
         -96
-      ],
+      ],    
       "id": "740c3c3b-8deb-4f12-8a98-8a6b5dceb74d",
       "name": "Code in JavaScript1"
     },
