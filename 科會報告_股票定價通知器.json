@@ -1,0 +1,664 @@
+{
+  "name": "科會報告_股票定價通知器",
+  "nodes": [
+    {
+      "parameters": {
+        "documentId": {
+          "__rl": true,
+          "value": "1BmaQPRvLAjgkrULIwCrgIMMExIEbwnldHEZVdBEW5NU",
+          "mode": "list",
+          "cachedResultName": "股價提醒器",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BmaQPRvLAjgkrULIwCrgIMMExIEbwnldHEZVdBEW5NU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "工作表1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BmaQPRvLAjgkrULIwCrgIMMExIEbwnldHEZVdBEW5NU/edit#gid=0"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        224,
+        176
+      ],
+      "id": "6d911ad0-f4cc-414d-9535-843b83938309",
+      "name": "List2",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "DS0bVLFbuqyVpI5B",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 先把 List1 的所有 row 抓進來（同一個 workflow run 的第 0 次執行、第 0 個輸入）\nconst sheetItems = $items('List2', 0, 0);\n\nreturn items.map((item, index) => {\n  // 對應到這一筆 HTTP 結果對應的那一列 Google Sheet\n  const row = sheetItems[index].json;\n\n  // 取得 TWSE API JSON 字串\n  const rawData = item.json.data;\n  const parsed = JSON.parse(rawData);\n  const msg = parsed.msgArray[0];\n\n  // 解析價格\n  let price = msg.z;\n  if (price === '-' || price === undefined) {\n    const buy = msg.b?.split('_')[0];\n    price = buy || msg.y;\n  }\n\n  return {\n    json: {\n      // TWSE 回傳內容\n      stockCode: msg.c,\n      stockName: msg.n,\n      priceTime: msg.t,\n      currentPrice: Number(price),\n\n      // 這邊用的是 List1 的欄位（row）\n      stockSymbol: row.StockSymbol,\n      condition: row.Condition,\n      targetPrice: Number(row.TargetPrice),\n      lastNotified: row.LastNotified || ''\n    }\n  };\n});\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        624,
+        176
+      ],
+      "id": "6d7528c2-d728-4fc7-aeb0-3b689c96f8c3",
+      "name": "Code in JavaScript2"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1840,
+        128
+      ],
+      "id": "416e84e6-5712-4d0c-9c42-2e33fa5ffd92",
+      "name": "Merge1"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1056,
+        112
+      ],
+      "id": "3b56a4d8-aa2c-48ea-94fb-ef8888a988d7",
+      "name": "Loop"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1344,
+        288
+      ],
+      "id": "8d333060-9509-4927-beb0-55ae5065f072",
+      "name": "將URL轉換成圖表"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.chart-img.com/v2/tradingview/advanced-chart/storage ",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-key",
+              "value": "KpEqTosoZ34PcnexPkXzSaMZKQAZDMQM8GdBf9G1"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "height",
+              "value": "300"
+            },
+            {
+              "name": "theme",
+              "value": "dark"
+            },
+            {
+              "name": "interval",
+              "value": "15m"
+            },
+            {
+              "name": "session",
+              "value": "extended"
+            },
+            {
+              "name": "symbol",
+              "value": "NASDAQ:TSLA"
+            },
+            {
+              "name": "timezone",
+              "value": "America/New_York"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        1200,
+        288
+      ],
+      "id": "95228cd4-5a75-4627-92e7-2657a6df7ee3",
+      "name": "抓取相關URL"
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "value": "models/gemini-2.5-flash",
+          "mode": "list",
+          "cachedResultName": "models/gemini-2.5-flash"
+        },
+        "text": "=你是一名多模態量化研究主管（Chief Multimodal Quant Researcher）。\n任務是在只有一張股市走勢圖的情況下，提供 簡短且可用的專業圖表分析。\n\n你的分析必須基於圖片可見資訊，不得幻想不存在的數據、不得虛構數字。\n\n【分析原則】\n\n只描述「圖片中看得到」的內容\n\n所有判斷都要寫出依據（例如：長上影、明顯壓力區、量能放大）\n\n禁止輸出買賣建議\n\n禁止感性語氣\n\n控制總字數，信件可閱讀為主\n\n【分析角色】\n\n圖像分析師：判讀 K 線、均線、成交量、型態\n\n價格行為交易員：描述主力意圖與量價行為\n\n不確定性審核員：指出圖片不足以判斷的部分\n\n【輸出格式】\n\nSummary（最多 2–3 行）\n用最重要的重點描述此走勢圖目前的狀態。\n\nPrice Action\n\n趨勢（上升／盤整／下跌）＋理由\n\n關鍵價區（支撐／壓力，用圖片中明顯區間描述）\n\n量能狀態（放量／縮量，與前波比較）\n\n主力行為（誘多／洗盤／假突破，寫清楚依據）\n\nUncertainty\n列出圖片中看不出的資訊（如：時間週期、新聞、市場背景）",
+        "inputType": "binary",
+        "simplify": false,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        1504,
+        288
+      ],
+      "id": "210c6e69-9216-4cb8-a5fa-236b6e1fab0f",
+      "name": "分析圖表內容",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "SiYsX9nmlXEx5ODs",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "43d17fee-ade1-44f0-9da0-167794648eec",
+              "name": "respond_AI_analysis",
+              "value": "={{ $json.candidates[0].content.parts[0].text }}",
+              "type": "string"
+            },
+            {
+              "id": "5b84b83d-579c-44e4-84eb-6c1a187395c4",
+              "name": "respond_ImageURL",
+              "value": "={{ $('將URL轉換成圖表').item.json.url }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1680,
+        288
+      ],
+      "id": "c1a3e3a3-eab4-495b-aaea-0d2debfdb366",
+      "name": "設定回覆格式"
+    },
+    {
+      "parameters": {
+        "sendTo": "aa346851243903687@gmail.com",
+        "subject": "=📈 股票到價通知：{{ $json.stockName }}（{{ $json.stockCode }}）vu現在股價{{ $json.currentPrice }}",
+        "message": "=<div style=\"font-family: Arial, sans-serif; padding: 20px; background: #f4f4f4;\">\n  <div style=\"max-width: 480px; margin: auto; background: #ffffff; border-radius: 12px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.1);\">\n    \n    <h2 style=\"margin-top: 0; font-size: 20px; color: #333;\">\n      📈 股票到價通知：{{ $json.stockName }}（{{ $json.stockCode }}）\n    </h2>\n\n    <hr style=\"border: none; border-top: 1px solid #ddd; margin: 16px 0;\">\n\n    <div style=\"font-size: 15px; line-height: 1.7; color: #444;\">\n\n      <div>\n        <strong>股票名稱：</strong>\n        {{ $json.stockName }}（{{ $json.stockCode }}）\n      </div>\n\n      <div>\n        <strong>目前價格：</strong>\n        <span style=\"padding: 3px 6px; border-radius: 6px; font-weight: bold;\n          color: {{ $json.condition === '>=' ? 'red' : 'green' }};\">\n          {{ $json.currentPrice }}\n        </span>\n      </div>\n\n      <div>\n        <strong>設定條件：</strong>\n        <span style=\"background: #eee; padding: 3px 6px; border-radius: 6px;\">\n          {{ $json.condition }} {{ $json.targetPrice }}\n        </span>\n      </div>\n\n      <div>\n        <strong>更新時間：</strong>\n        {{ $json.priceTime }}\n      </div>\n      <!-- Chart Image -->\n      <div style=\"margin-top: 18px; text-align: center;\">\n        <strong>示範圖表（TSLA）：</strong><br><br>\n        <img src=\"{{ $json.respond_ImageURL }}\" \n             alt=\"Chart Image\" \n             style=\"max-width: 100%; border-radius: 8px; border: 1px solid #ddd;\">\n      </div>\n\n      <!-- AI Analysis -->\n      <div style=\"margin-top: 18px; font-size: 15px; white-space: pre-line;\">\n        <strong>AI 分析（示範 TSLA 走勢）：</strong><br>\n        {{ $json.respond_AI_analysis }}\n      </div>\n\n      \n\n    </div>\n\n    <hr style=\"border: none; border-top: 1px solid #ddd; margin: 16px 0;\">\n\n    <div style=\"font-size: 12px; color: #888; text-align: center;\">\n      中國信託綜合證券 CTBC SECURITIES 通知您\n    </div>\n\n  </div>\n</div>\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2016,
+        288
+      ],
+      "id": "48d1a653-2d8e-4594-aaa2-022a67a53da5",
+      "name": "寄信",
+      "webhookId": "63cd0bcf-4386-4c4c-b23c-557d0a40a33f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "uPtzuE34xoeTcrDU",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "=http://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=tse_{{ $json.StockSymbol }}.tw&_=CURRENT_TIME",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.3,
+      "position": [
+        432,
+        176
+      ],
+      "id": "70f03f5d-198d-4306-8586-c645e6b54d40",
+      "name": "抓取證交所API資料"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "*/5 9-13 * * 1-5"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        16,
+        176
+      ],
+      "id": "8143db00-50fd-4eb7-84b7-cf78bd763b4b",
+      "name": "時程設定9:00-13:00"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1BmaQPRvLAjgkrULIwCrgIMMExIEbwnldHEZVdBEW5NU",
+          "mode": "list",
+          "cachedResultName": "股價提醒器",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BmaQPRvLAjgkrULIwCrgIMMExIEbwnldHEZVdBEW5NU/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "工作表1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1BmaQPRvLAjgkrULIwCrgIMMExIEbwnldHEZVdBEW5NU/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "StockSymbol": "={{ $('If').item.json.stockSymbol }}",
+            "LastNotified": "={{ $now.toISO() }}"
+          },
+          "matchingColumns": [
+            "StockSymbol"
+          ],
+          "schema": [
+            {
+              "id": "StockSymbol",
+              "displayName": "StockSymbol",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "StockName",
+              "displayName": "StockName",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Condition",
+              "displayName": "Condition",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "TargetPrice",
+              "displayName": "TargetPrice",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "LastNotified",
+              "displayName": "LastNotified",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        2192,
+        288
+      ],
+      "id": "810f21b1-6268-43b3-b2f5-013427fd62c8",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "DS0bVLFbuqyVpI5B",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6ba99d2a-f89b-47dc-8a96-68515a2a8db9",
+              "leftValue": "={{ \n(\n ($json.condition === \">=\" && Number($json.currentPrice) >= Number($json.targetPrice))\n\n||\n\n ($json.condition === \"<=\" && Number($json.currentPrice) <= Number($json.targetPrice))\n )\n\n&&\n\n(\n$json.lastNotified.slice(0,10).replace(/-/g,\"\") !== new Date().toISOString().slice(0,10).replace(/-/g,\"\") \n)\n\n}}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        784,
+        176
+      ],
+      "id": "f5420dc5-c07d-46a3-a62b-049ee06e7c70",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "content": "## AI分析、將結果寄出\n**K 線圖 → AI 分析 → 組成通知內容 → 寄信並回寫紀錄**\n",
+        "height": 560,
+        "width": 1392,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        976,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "54b2f2fe-b44d-420e-97c0-99f2e6b99e7a",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## 時程、Google Sheet資料讀取\n**定時觸發\n讀取 Google Sheet\n取得每檔股票的代號、目標價、上次通知時間**\n",
+        "height": 560,
+        "width": 368,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -16,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "c1663a76-3982-40de-ba8e-aebb3862982f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## 撈盤即時價況 → 達標才進 Loop\n即時抓行情\n達到門檻 → 允許進 Loop\n未達 → 直接略過\n使用證交所公開資料API",
+        "height": 560,
+        "width": 496,
+        "color": 2
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        400,
+        0
+      ],
+      "typeVersion": 1,
+      "id": "039567bb-a8d0-4b1b-ae59-b44705020091",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {
+    "分析圖表內容": [
+      {
+        "json": {
+          "candidates": [
+            {
+              "content": {
+                "parts": [
+                  {
+                    "text": "1. Summary\n特斯拉股價在經歷初期大幅下跌後，近兩日呈現約 390.00 至 400.00 區間內的震盪盤整。\n多次嘗試突破 400.00 關口均遭遇賣壓回落，同時 390.00 附近顯示出初步支撐。\n當前價格 393.83，市場缺乏明確的方向性動能。\n\n2. Price Action\n**當前趨勢：** 盤整。\n依據：從 Day 1 的高點（約 425.00）急劇下跌至 Day 1 尾盤的低點（約 388.00）之後，股價在 Day \"21\" 和 Day \"24\" 期間，主要在 390.00 至 400.00 之間來回波動，未能形成持續性更高的高點或更低的低點。\n\n**關鍵價區：**\n*   **壓力：**\n    *   約 400.00：依據是 Day \"21\" 和 Day \"24\" 兩次價格嘗試突破此水平（特別是 Day \"24\" 08:00 左右的 K 線衝高），隨後都被實體較大的紅色 K 線打回，顯示此處有顯著賣壓。\n    *   約 410.00 - 420.00：依據是 Day 1 盤中從此區間急劇下跌，顯示上方存在較強的長期賣盤。\n*   **支撐：**\n    *   約 390.00：依據是 Day 1 16:00 後、Day \"21\" 11:00 左右和 Day \"24\" 10:00 左右，價格跌至或略低於此價位時，K 線下方出現較長下影線或隨後價格迅速反彈，顯示在此價格附近有買盤介入。\n\n**量能狀態：**\n不可推論的部分：圖片未提供任何成交量數據，故無法分析量能狀態。\n\n**主力意圖：**\n*   **洗盤/誘空：** 依據是 Day \"21\" 11:00 左右以及 Day \"24\" 10:00 左右，價格跌破 390.00 附近後，迅速出現長下影線的 K 線並在後續 K 線中快速反彈，這可能是在低位清理空頭或引誘空頭進場後反向拉升。\n*   **假突破：** 依據是 Day \"24\" 08:00 左右，價格向上突破 400.00 關口（形成一根相對較大的綠色 K 線），但緊接著被一根實體更大的紅色 K 線完全吞噬並打回 400.00 以下，這顯示多頭的突破嘗試未能成功，形成多頭的假突破。\n\n**K 線結構：**\n*   **長實體黑 K 線：** Day 1 12:00 之後出現多根長實體黑 K 線，顯示在價格從高點下跌過程中賣方力量強勁。\n*   **長下影線：** Day \"21\" 11:00 和 Day \"24\" 10:00 左右的 K 線帶有相對長的下影線，顯示在低點有買盤承接。\n*   **吞噬形態：** 依據是 Day \"24\" 08:00 左右，一根大實體紅色 K 線幾乎完全覆蓋了前一根實體較小的綠色 K 線（看跌吞噬），表明賣方力量強勢，壓制了上升趨勢。\n*   **缺口：** 圖片中未顯示明顯的跳空缺口。\n*   **小實體 K 線：** 在 Day \"21\" 和 Day \"24\" 的盤整區間內，多數 K 線實體相對較小，影線長度不一，反映出市場在該區間內買賣雙方力量均衡，方向不明。\n\n3. Risk Management\n*   **向上風險（針對空頭部位）：**\n    *   若價格能有效突破並站穩 400.00 關口，特別是若能以大實體綠色 K 線突破，或在此價位上方形成新的支撐結構，則可能引發空頭回補，導致價格向上加速，目標可能指向 410.00 至 420.00 區間。\n    *   若能持續在 390.00 獲得支撐並形成連續的更高低點和更高高點，則盤整可能轉化為上升趨勢。\n*   **向下風險（針對多頭部位）：**\n    *   若 390.00 附近的支撐未能守住，價格以實體較大的紅色 K 線跌破該水平，尤其是在 Day \"21\" 和 Day \"24\" 形成的最低點（約 388.00 左右），則可能確認短期下降趨勢的延續，目標可能測試 380.00 甚至更低。\n    *   400.00 關口的多次未能成功突破，可能導致多頭信心減弱，若賣壓持續，價格恐再次探底。\n\n4. Uncertainty Audit\n**不可推論的部分：**\n*   **成交量數據：** 圖片完全缺乏成交量資訊，無法判斷任何基於成交量的市場強弱、買賣壓力或資金流向。\n*   **任何技術指標：** 圖表未包含任何移動平均線、RSI、MACD 等，無法進行指標分析。\n*   **更長時間週期趨勢：** 僅有約三天的 15 分鐘 K 線，無法判斷中長期（日線、週線等）的趨勢、關鍵支撐壓力或整體市場結構。\n*   **基本面或消息面資訊：** 圖表僅提供價格走勢，無法推斷任何可能影響股價的公司基本面、行業新聞或其他宏觀經濟事件。\n*   **精確價格點位：** 雖然有當前 K 線的 OHLC，但對於圖中其他 K 線的具體精確高點、低點，只能進行目測估計，無法提供精確數字。\n*   **盤前盤後交易：** 圖表顯示的可能是正常交易時段的價格行為，無法判斷盤前或盤後交易的影響。"
+                  }
+                ],
+                "role": "model"
+              },
+              "finishReason": "STOP",
+              "index": 0
+            }
+          ],
+          "usageMetadata": {
+            "promptTokenCount": 688,
+            "candidatesTokenCount": 1495,
+            "totalTokenCount": 5131,
+            "promptTokensDetails": [
+              {
+                "modality": "TEXT",
+                "tokenCount": 430
+              },
+              {
+                "modality": "IMAGE",
+                "tokenCount": 258
+              }
+            ],
+            "thoughtsTokenCount": 2948
+          },
+          "modelVersion": "gemini-2.5-flash",
+          "responseId": "tfoiaYGHJ8uU1e8P26acuQo"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "List2": {
+      "main": [
+        [
+          {
+            "node": "抓取證交所API資料",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript2": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge1": {
+      "main": [
+        [
+          {
+            "node": "寄信",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop": {
+      "main": [
+        [],
+        [
+          {
+            "node": "抓取相關URL",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "將URL轉換成圖表": {
+      "main": [
+        [
+          {
+            "node": "分析圖表內容",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "抓取相關URL": {
+      "main": [
+        [
+          {
+            "node": "將URL轉換成圖表",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "分析圖表內容": {
+      "main": [
+        [
+          {
+            "node": "設定回覆格式",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "設定回覆格式": {
+      "main": [
+        [
+          {
+            "node": "Merge1",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "寄信": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "抓取證交所API資料": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "時程設定9:00-13:00": {
+      "main": [
+        [
+          {
+            "node": "List2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "Asia/Taipei",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "127e8f1b-89d3-47e9-b729-67130174fa55",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "e022e10cb008bdc5fb6d4de21ae241a036930c7a963389c6c2b7becf3a9cc6da"
+  },
+  "id": "A3duIto8LpKZ1F1g",
+  "tags": []
+}
